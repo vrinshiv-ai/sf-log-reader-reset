@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reset Password — Salesforce Log Reader</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f5f7fa;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #333;
+    }
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      padding: 40px 44px;
+      width: 380px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+      text-align: center;
+    }
+    .logo { font-size: 28px; margin-bottom: 8px; }
+    h1 { font-size: 20px; font-weight: 700; margin-bottom: 6px; color: #111; }
+    .sub { font-size: 13px; color: #888; margin-bottom: 28px; }
+    label {
+      display: block;
+      text-align: left;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 5px;
+      color: #333;
+    }
+    input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #d0d0d0;
+      border-radius: 6px;
+      font-size: 14px;
+      margin-bottom: 16px;
+      outline: none;
+      font-family: inherit;
+    }
+    input:focus { border-color: #0176d3; }
+    button {
+      width: 100%;
+      padding: 11px;
+      border-radius: 6px;
+      border: none;
+      background: #0176d3;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    button:disabled { opacity: 0.65; cursor: not-allowed; }
+    .hint { font-size: 11px; color: #aaa; margin-top: -10px; margin-bottom: 18px; text-align: left; }
+    .error {
+      background: #fff3f3;
+      border: 1px solid #f5c6cb;
+      color: #c62828;
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+    .success { text-align: center; }
+    .success .icon { font-size: 48px; margin-bottom: 14px; }
+    .success p { font-size: 14px; color: #555; line-height: 1.6; }
+    .invalid { text-align: center; }
+    .invalid .icon { font-size: 48px; margin-bottom: 14px; }
+    .invalid p { font-size: 14px; color: #888; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">⚡</div>
+    <h1>Salesforce Log Reader</h1>
+    <p class="sub" id="subtitle">Set your new password</p>
+
+    <div id="form-view">
+      <form id="reset-form">
+        <label for="password">New password</label>
+        <input type="password" id="password" placeholder="••••••••" minlength="6" required />
+        <div class="hint">Minimum 6 characters</div>
+
+        <label for="confirm">Confirm password</label>
+        <input type="password" id="confirm" placeholder="••••••••" minlength="6" required />
+
+        <div id="error-msg" class="error" style="display:none;"></div>
+
+        <button type="submit" id="submit-btn">Set new password</button>
+      </form>
+    </div>
+
+    <div id="success-view" class="success" style="display:none;">
+      <div class="icon">✅</div>
+      <p>Your password has been updated.<br/>You can now close this tab and sign in to the extension.</p>
+    </div>
+
+    <div id="invalid-view" class="invalid" style="display:none;">
+      <div class="icon">⚠️</div>
+      <p>This reset link is invalid or has expired.<br/>Please request a new one from the extension.</p>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    const SUPABASE_URL = 'https://kpekuslfqvwkkqbooxxl.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtwZWt1c2xmcXZ3a2txYm9veHhsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg3NzU1NTksImV4cCI6MjA5NDM1MTU1OX0.b0pXuaHGswYbdIn1_CRt9wUFQp9TM9oc5qGVzEi-5TM';
+
+    const { createClient } = supabase;
+    const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const formView    = document.getElementById('form-view');
+    const successView = document.getElementById('success-view');
+    const invalidView = document.getElementById('invalid-view');
+    const errorMsg    = document.getElementById('error-msg');
+    const submitBtn   = document.getElementById('submit-btn');
+
+    // Parse hash params from the reset link
+    const hash   = window.location.hash.substring(1);
+    const params = new URLSearchParams(hash);
+    const accessToken  = params.get('access_token');
+    const refreshToken = params.get('refresh_token');
+    const type         = params.get('type');
+
+    async function init() {
+      if (type !== 'recovery' || !accessToken) {
+        formView.style.display = 'none';
+        invalidView.style.display = 'block';
+        document.getElementById('subtitle').textContent = 'Invalid reset link';
+        return;
+      }
+
+      // Establish session from the reset token
+      const { error } = await client.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+
+      if (error) {
+        formView.style.display = 'none';
+        invalidView.style.display = 'block';
+        document.getElementById('subtitle').textContent = 'Link expired';
+      }
+    }
+
+    document.getElementById('reset-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorMsg.style.display = 'none';
+
+      const password = document.getElementById('password').value;
+      const confirm  = document.getElementById('confirm').value;
+
+      if (password !== confirm) {
+        errorMsg.textContent = 'Passwords do not match.';
+        errorMsg.style.display = 'block';
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Saving…';
+
+      const { error } = await client.auth.updateUser({ password });
+
+      if (error) {
+        errorMsg.textContent = error.message;
+        errorMsg.style.display = 'block';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Set new password';
+      } else {
+        formView.style.display = 'none';
+        successView.style.display = 'block';
+        document.getElementById('subtitle').textContent = 'Password updated';
+      }
+    });
+
+    init();
+  </script>
+</body>
+</html>
