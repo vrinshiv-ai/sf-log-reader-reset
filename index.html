@@ -130,10 +130,19 @@
     const type         = params.get('type');
 
     async function init() {
+      // Email confirmation after sign-up
+      if (type === 'signup' || type === 'magiclink') {
+        formView.style.display = 'none';
+        successView.style.display = 'block';
+        document.getElementById('subtitle').textContent = 'Email confirmed';
+        successView.innerHTML = '<div class="icon">✅</div><p>Your email has been confirmed.<br/>You can close this tab and sign in to the extension.</p>';
+        return;
+      }
+
       if (type !== 'recovery' || !accessToken) {
         formView.style.display = 'none';
         invalidView.style.display = 'block';
-        document.getElementById('subtitle').textContent = 'Invalid reset link';
+        document.getElementById('subtitle').textContent = 'Invalid link';
         return;
       }
 
